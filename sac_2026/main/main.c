@@ -38,9 +38,11 @@ static void sample_surface(adc_handle_t sensor, float out[SAC_SENSORS], const ch
 void app_main(void)
 {
     ESP_LOGW(TAG, "SAC 2026 bench firmware. Motor armed=%d", SAC_MOTORS_ARMED);
-    ESP_LOGW(TAG, "No forward object sensor configured; obstacle task INCOMPLETE.");
+    ESP_LOGW(TAG, "Object GPIO=%d; dropzone GPIO=%d; finish GPIO=%d", SAC_OBJECT_GPIO,
+             SAC_DROPZONE_GPIO, SAC_FINISH_GPIO);
     adc_handle_t sensor;
     ESP_ERROR_CHECK(enable_line_sensor(&sensor));
+    ESP_ERROR_CHECK(sac_obstacle_init());
     sac_drive_t drive;
     ESP_ERROR_CHECK(sac_drive_init(&drive));
     ESP_ERROR_CHECK(sac_drive_stop(&drive));
@@ -72,11 +74,18 @@ void app_main(void)
         last_ms = now;
         line_sensor_array r = read_line_sensor(sensor);
         sac_observation_t observation = sac_perception_process(&perception, r.adc_reading);
+        sac_task_inputs_t inputs = sac_obstacle_read();
+        sac_events_t events = {
+            .object_present = inputs.object_present,
+            .dropzone_reached = inputs.dropzone_reached,
+            .finish_present = inputs.finish_present
+        };
         sac_wheels_t command = sac_nav_step(&navigation, &observation,
-                                             sac_obstacle_present(), now, dt);
+                                             events, now, dt);
         if (navigation.state != previous_state) {
-            ESP_LOGI(TAG, "state %s -> %s; nodes=%d", sac_nav_state_name(previous_state),
-                     sac_nav_state_name(navigation.state), navigation.node_count);
+            ESP_LOGI(TAG, "state %s -> %s; nodes=%d, pushes=%d, turn=%c", sac_nav_state_name(previous_state),
+                     sac_nav_state_name(navigation.state), navigation.node_count,
+                     navigation.pushed_count, navigation.maneuver ? navigation.maneuver : '-');
             previous_state = navigation.state;
         }
         if (observation.polarity_switched)
@@ -88,9 +97,9 @@ void app_main(void)
             return;
         }
         if ((uint32_t)(now - log_ms) >= SAC_LOG_INTERVAL_MS) {
-            ESP_LOGI(TAG, "state=%s pos=%.2f active=%d conf=%.2f cmd=(%.1f,%.1f) adc=%d,%d,%d,%d,%d",
+            ESP_LOGI(TAG, "state=%s pos=%.2f active=%d mask=0x%x conf=%.2f cmd=(%.1f,%.1f) adc=%d,%d,%d,%d,%d",
                      sac_nav_state_name(navigation.state), observation.position,
-                     observation.active_count, observation.confidence,
+                     observation.active_count, observation.active_mask, observation.confidence,
                      command.left, command.right,
                      r.adc_reading[0], r.adc_reading[1], r.adc_reading[2],
                      r.adc_reading[3], r.adc_reading[4]);

@@ -5,3 +5,4 @@
 /dependencies.lock
 
 /tests/test_logic
+/tests/core

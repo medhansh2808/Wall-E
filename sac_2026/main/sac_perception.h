@@ -16,6 +16,7 @@ typedef struct {
     bool polarity_switched;
     bool white_line;
     int active_count;
+    unsigned active_mask; /* five bits, bit 0 = left-most sensor */
     float position;      /* [-2,2] left-to-right; negative is left. */
     float confidence;    /* [0,1], conservative measure of line evidence. */
     float activation[SAC_SENSORS];

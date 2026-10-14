@@ -1,117 +1,118 @@
-# SAC 2026 firmware for the SRA Wall-E board
+# SAC 2026: Wall-E competition firmware (unknown-course baseline)
 
-This is a **new ESP-IDF project** designed to live at `Wall-E/sac_2026/`. It keeps
-SRA's original examples and git submodules untouched.
+An independent ESP-IDF project inside `Wall-E/sac_2026/`, based on the
+existing Wall-E five-sensor LSA and two motor driver APIs. The original
+`1_led_matrix/` through `6_self_balancing/` examples and component submodule
+are not changed. Designed for **two driven wheels plus a caster**.
 
-## What works in the code now
+## What this version actually does
 
-- ESP32 SRA board integration using verified `enable_line_sensor`,
-  `read_line_sensor`, `enable_motor_driver`, and `set_motor_speed` APIs.
-- Startup calibration of five LSA channels from known white and black surfaces;
-  fails closed on inadequate contrast.
-- Analog five-sensor centroid with symmetric weights and rejection of ambiguous
-  disconnected patterns.
-- Normal/inverted line detection using multiple consistent readings.
-- Time-aware PD steering, filtered derivative, adaptive speed and PWM ramping.
-- Signed wheel commands, turns, an ordered node action string, cautious search
-  after losing the line, and an explicit fault-stop state.
-- An optional finish-marker state, disabled until the actual END marking is known.
-- Telemetry over serial, host-compiled logic tests.
+- Calibrates each of the five line sensors from measured black and white
+  surface readings at boot; stops if their contrast is inadequate.
+- Estimates a continuous, signed line position rather than using asymmetric
+  binary weights; flags wide and disconnected patterns.
+- Supports auto-inversion of white/black line polarity with confirmation.
+- Uses filtered, elapsed-time-aware PD steering and adaptive speed; has
+  independently signed wheel commands and bounded PWM slew.
+- Detects candidate junctions from 5-bit sensor patterns, advances slowly
+  to inspect them, and chooses an exit via a **simple priority policy**, not
+  a pre-programmed `SAC_NODE_ROUTE` and **not micromouse/graph exploration**.
+- Performs timed pivots with line reacquisition confirmation and bounded
+  recovery after losing the line; stops if it cannot recover.
+- Supplies optional digital GPIO adapters for object detection, drop-zone
+  confirmation, and the finish marker, with dedicated approach/push/U-turn
+  states. Disabled until hardware pins and marker semantics are confirmed.
+- Implements event and serial diagnostic logging and CPU-only unit tests.
 
-## Intentionally unfinished: NOT COMPETITION-READY
+## Known gaps: do not call this competition ready
 
-**No front obstacle sensor or drop-zone confirmation has been integrated.** The
-`main/sac_obstacle.c` driver currently always returns `false` and the object
-state machine is disabled. SAC invalidates runs with zero successful pushes;
-this is a critical blocker, not a cosmetic TODO. The timed PUSH routine is a
-proposed maneuver only, not proof that the object entered the drop zone.
+The competition rules specify object detection and pushing into a drop zone,
+checkpoint traversal, an inverted line segment, and a sharp snake-road turn.
+They do not define the final junction layout or the electrical interfaces of
+an obstacle sensor or END marker. The five LSA sensors look at the floor; they
+are not a verified forward obstacle detector.
 
-The actual final maze, junction styles, motor-to-wheel mapping, speed/timing,
-end marker, and sensor geometry are not specified sufficiently in the SAC PDF.
-`SAC_NODE_ROUTE` defaults to straight and cannot solve an unknown maze. The
-present node detector recognizes broad patches; T-shaped/side branches may
-need a more capable classifier informed by physical tests.
+* **No guaranteed unknown-maze solution.** Exit priority (straight/left/right
+  or left/right-first) is a practical heuristic. On a looped or deliberately
+  tricky course, it may revisit a loop or miss a required task. The physical
+  junction observation window must be tested to verify branch detection.
+* **Obstacle sensor not configured.** `SAC_OBJECT_GPIO=-1`. Set to a verified
+  allowed ESP32 GPIO and attach a compatible digital obstacle sensor only
+  after confirming wiring, voltage compatibility and interference with SRA
+  board peripherals.
+* **Drop zone and finish semantics unknown.** `SAC_DROPZONE_GPIO=-1`,
+  `SAC_FINISH_GPIO=-1` by default. Digital inputs are optional adapters; if
+  the actual arena uses a floor marking or some other signal, replace them
+  with a verified detector. A timed push is *not* considered successful unless
+  `SAC_ALLOW_UNVERIFIED_TIMED_PUSH` is manually enabled after physical tests.
+* **Checkpoint recognition is not implemented**, since the competition rules
+  do not define a uniquely distinguishable marker.
+* **No encoders/IMU angle feedback** is used; turns are timed plus LSA
+  confirmation. Motor wiring, polarity, LSA sensor ordering, calibration,
+  steering sign, PWM values, turn durations and stop behavior need testing.
+* This code **has not been compiled with your local ESP-IDF installation nor
+  flashed or run on your physical board**. The earlier package compiled on
+  your laptop; these additional changes require a NEW `idf.py build`.
 
-**No ESP-IDF compiler is installed in the artifact-building environment.**
-The logic tests pass under native GCC. Building and flashing with your
-`components/sra-board-component` submodule is the next required validation.
+## CPU-only setup & tests (no GPU needed)
 
-## Install into your existing fork
-
-From your Ubuntu laptop, in a new development branch:
+From the repository root:
 
 ```bash
 cd ~/Wall-E
-git switch -c feature/sac-firmware
-# Download the supplied ZIP to ~/Downloads/SAC_2026_firmware.zip
-# If sac_2026 already exists, BACK IT UP OUTSIDE this repository first:
-[ ! -e sac_2026 ] || mv sac_2026 "$HOME/sac_2026_backup_$(date +%Y%m%d_%H%M%S)"
-unzip ~/Downloads/SAC_2026_firmware.zip -d ~/Wall-E
-```
-
-The ZIP has a top-level `sac_2026/` folder.
-
-## Test on laptop — CPU-only, GPU not required
-
-```bash
-cd ~/Wall-E/sac_2026/tests
-make test
-```
-
-## Build on laptop — CPU-only, GPU not required
-
-```bash
+make -C sac_2026/tests clean test
 source ~/esp/esp-idf/export.sh
-cd ~/Wall-E/sac_2026
-idf.py set-target esp32
+cd sac_2026
 idf.py build
 ```
 
-**Read the build output.** Do not flash if the build fails. If you find a
-submodule version incompatibility, share the compiler error; don't upgrade
-or edit the pinned SRA component until you've identified the failure.
+`idf.py build` does not flash the robot. Do not flash while there are
+compile errors.
 
-## Bring-up procedure — physical ESP32 required, GPU not required
+## Before bench testing
 
-1. Review `main/sac_config.h`. `SAC_MOTORS_ARMED` is intentionally **0**.
-2. Compile and flash the DISARMED firmware to the board using `idf.py flash monitor`.
-3. With the bot safely supported, position ALL five sensors on a white patch
-   when requested in the serial log, then on black. Ensure uniform coverage.
-4. Check individual ADC readings/contrast and line positions while manually
-   moving the sensor across the tape. Verify left is negative, right positive.
-5. Lift the drive wheels off the floor. Confirm `MOTOR_A_0` is physically the
-   left wheel and `MOTOR_A_1` is right. Check the direction of both motors.
-6. Fix `SAC_LEFT_MOTOR_REVERSED`, `SAC_RIGHT_MOTOR_REVERSED`, or the motor
-   handle assignment if the wheels rotate incorrectly.
-7. Set `SAC_MOTORS_ARMED` to **1** only after the checks. Build and flash again.
-8. Test at low speed on a short straight line, then gentle curves. If steering
-   diverges from the tape, immediately stop, swap `SAC_STEERING_SIGN`, and retest.
-9. Test inversion, junctions, snake curve, and timed pivots. Do not trust any
-   default PWM/gain/time values as calibrated measurements.
-10. Confirm safe stop behavior before any obstacle experiments.
+1. Keep `SAC_MOTORS_ARMED=0` in `main/sac_config.h` for the first flash.
+2. Check five-sensor white/black calibration using the serial log.
+3. Identify which motor driver output connects to each actual wheel and
+   verify the motor directions with the wheels raised.
+4. Verify whether line sensor element 0 is physically the **leftmost** sensor
+   when looking in the robot's direction of travel. Reverse the ordering in
+   the sensor adapter if not.
+5. Validate that left-of-center error actually steers left with the physical
+   drivetrain, correcting `SAC_STEERING_SIGN` or motor wiring as needed.
+6. Calibrate gains and safe PWM limits starting at reduced speeds.
+7. Observe 5-bit line sensor masks over straight lines, left/right junctions,
+   crossroads and tight bends. Adjust `SAC_NODE_CONFIRM_SAMPLES`,
+   `SAC_NODE_SCAN_MIN_MS`, `SAC_NODE_SCAN_MAX_MS` and policy appropriately.
+8. Test inversion transitions in both directions. Check false polarity
+   switches at junctions and gaps.
+9. Test line-loss recovery and pivot timeouts at a safe clearance, then
+   full snake-road handling and repeated obstacle runs.
+10. Integrate and verify a suitable object sensor and drop-zone detector.
+    Do **not** claim a successful push based only on a timer.
 
-Calibration occurs on EVERY boot. Motor outputs stay at zero during it.
+## Configuration reference
 
-## Collaboration
+All parameters are in `main/sac_config.h`. The most relevant are:
 
-```bash
-cd ~/Wall-E
-git add sac_2026
-git commit -m "Add SAC 2026 competition firmware baseline"
-git push -u origin feature/sac-firmware
-```
+- `SAC_MOTORS_ARMED`: 0 keeps motor outputs disarmed (default).
+- `SAC_JUNCTION_POLICY`: 0 = L-S-R, 1 = R-S-L, 2 = S-L-R (default).
+- `SAC_OBJECT_GPIO`, `SAC_DROPZONE_GPIO`, `SAC_FINISH_GPIO`: -1 disables
+  input; set only after checking the SRA board pinout and available pins.
+- `SAC_ALLOW_UNVERIFIED_TIMED_PUSH`: 0 by default; do not enable unless
+  physical experiments justify the mode.
+- `SAC_FINISH_REQUIRE_PUSH`: prevents an END marker from ending the run
+  before a detected, confirmed push.
 
-Open a pull request **into your fork**, not `SRA-VJTI/Wall-E`.
-Review the rules about code visibility between competing teams before publishing.
+The best junction policy cannot be chosen without more detailed competition
+rules and physical track trials. This firmware does **not** know the final
+course and does **not** depend on memorized junction indices.
 
-## Sources and assumptions
+## Deployment and Git
 
-- Competition rules: user-provided `SAC_2026.pdf`, pages 2–7.
-- Wall-E references: `2_LSA/main/main.c`, `3_MPU/main/main.c`,
-  `5_line_following/main/line_following.c`, `5_line_following/CMakeLists.txt`,
-  `5_line_following/main/CMakeLists.txt`.
-- Hardware API reference: SRA Board Components' `lsa.h`, `motor_driver.h`,
-  `sra_board.h`, and the `components/sra-board-component` submodule.
-- Retains the parent MIT-licensed hardware library as an unchanged submodule.
+To apply this upgrade to your existing clone, follow the command sequence in
+`UPGRADE_NOTES.md` or use the separately supplied `.patch`. Prefer creating a
+feature branch and opening a pull request against **your private repository**.
 
-See `AUDIT_AND_ROADMAP.md` for rule-to-feature mapping and the missing work.
+ESP-IDF build products (`build/`, `sdkconfig`, compiled host tests) must not be
+committed. Retain the original Wall-E project's MIT license and attribution.

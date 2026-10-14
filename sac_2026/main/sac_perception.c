@@ -44,6 +44,7 @@ static sac_observation_t estimate(const sac_perception_t *p, const int raw[5], b
         weighted += (float)(i - 2) * activation;
     }
     o.white_line = white_line;
+    o.active_mask = (unsigned)mask;
     o.wide = o.active_count >= 4;
     /* A wide marking is useful for nodes, but not a reliable line position. */
     o.has_line = o.active_count >= 1 && o.active_count <= 3;
