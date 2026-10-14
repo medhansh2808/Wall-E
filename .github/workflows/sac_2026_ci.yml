@@ -1,0 +1,20 @@
+name: SAC 2026 host tests
+on:
+  pull_request:
+    paths:
+      - 'sac_2026/**'
+      - '.github/workflows/sac_2026_ci.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'sac_2026/**'
+      - '.github/workflows/sac_2026_ci.yml'
+permissions:
+  contents: read
+jobs:
+  controller-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run native C tests
+        run: make -C sac_2026/tests clean test
