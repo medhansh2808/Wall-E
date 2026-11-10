@@ -5,7 +5,7 @@ This example reads an **MPU6050 six-axis IMU** on the SRA board and illustrates 
 - **Orientation feedback:** estimate roll and pitch using the board component's complementary filter, print them to the serial monitor, and optionally show them on the OLED.
 - **Accelerometer visualisation:** use raw X/Y acceleration to produce a changing pattern on the **8×8 MAX7219 LED matrix**.
 
-The source of this example is [`main/main.c`](main/main.c). It uses the common [SRA board component](../components/sra-board-component) for MPU6050, OLED and LED matrix drivers.
+This example uses the common [SRA board component](../components/sra-board-component) for MPU6050, OLED and LED matrix drivers.
 
 ## Contents
 
@@ -15,8 +15,6 @@ The source of this example is [`main/main.c`](main/main.c). It uses the common [
 - [Accelerometer-to-LED mapping](#accelerometer-to-led-mapping)
 - [Functions used](#functions-used)
 - [Code flowchart](#code-flowchart)
-- [Build and run](#build-and-run)
-- [Notes and limitations](#notes-and-limitations)
 
 ## Hardware and configuration
 
@@ -98,9 +96,17 @@ The dot product is positive on the side of the display pointed to by the acceler
 
 The application sets bits with `rows[i] |= 1 << j`. In the logical bitmap, **bit 7 is the leftmost LED** and bit 0 is the rightmost. Therefore a positive Y raw reading fills the **left** half of the logical display, while positive X fills the **upper** half. The low-level driver transposes the logical rows to match the board's actual MAX7219 wiring.
 
-![Software-generated illustration of the LED matrix for positive and negative accelerometer directions](assets/acceleration_to_matrix.svg)
+### Actual LED matrix output on the SRA board
 
-*Illustration generated from the pixel thresholding logic, starting with all LEDs off; **not a recording of a physical board**. The actual display can retain some previously lit pixels near boundaries because of hysteresis.*
+These photographs show the same SRA board running the MPU6050 example while held at different orientations. The LED patterns change with the measured acceleration direction.
+
+| Left tilt | Right tilt |
+| --- | --- |
+| <img src="assets/mpu_tilt_left.jpeg" alt="SRA board tilted left with its LED matrix illuminated" width="360"> | <img src="assets/mpu_tilt_right.jpeg" alt="SRA board tilted right with a different LED pattern" width="360"> |
+| **Forward tilt** | **Backward tilt** |
+| <img src="assets/mpu_tilt_forward.jpeg" alt="SRA board tilted forward with its LED matrix illuminated" width="360"> | <img src="assets/mpu_tilt_backward.jpeg" alt="SRA board tilted backward with a changed LED pattern" width="360"> |
+
+The precise appearance can vary slightly as the matrix applies hysteresis to readings near LED switching boundaries.
 
 ### Bitmap example
 
@@ -181,23 +187,10 @@ flowchart TD
     S6 -.->|3 signed accelerometer readings| M2
 ```
 
-## Build and run
+## Working hardware demonstration
 
-With the SRA ESP-IDF toolchain activated, run these commands from `3_MPU/`:
+The following is a real recording of the SRA board with an MPU6050 connected. OLED support is disabled for this demonstration; the LED matrix responds to changes in orientation.
 
-```bash
-idf.py menuconfig             # Optional: configure OLED / LED matrix
-idf.py build
-idf.py -p <PORT> flash monitor
-```
+![Animated preview of the MPU6050-driven LED matrix](assets/mpu_demo_preview.gif)
 
-Choose the serial port connected to the board (for example `/dev/ttyUSB0` on many Linux systems). The default build target is **ESP32-S3**; check your board hardware and existing configuration before changing it. In the monitor, look for `Roll: ... | Pitch: ...` readings. Tilting the board should change the LED pattern when the LED matrix is enabled.
-
-## Notes and limitations
-
-- This example is a **visualisation**, not a calibrated acceleration or orientation instrument. The LED task uses raw X/Y acceleration independently of the complementary-filter angles.
-- The current implementation does not handle zero X/Y magnitude before normalising. When both values are zero, the division can produce non-finite values; handling this would require a separate firmware change.
-- `mpu_task()` exits its sampling loop when `read_mpu6050()` returns an error, whereas `display_task()` keeps waiting for queued data. There is no automatic recovery inside the measurement task.
-- The source code has no explicit sampling delay in `mpu_task()`. The 20 ms delay applies only to `display_task()`.
-
-For the MAX7219 hardware register details and bitmap orientation, also see the [SRA board LED matrix API](../components/sra-board-component/include/led_matrix.h).
+[Watch the complete MPU6050 LED matrix demonstration (MP4)](assets/mpu_demo.mp4)
