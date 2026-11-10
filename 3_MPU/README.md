@@ -15,6 +15,7 @@ This example uses the common [SRA board component](../components/sra-board-compo
 - [Accelerometer-to-LED mapping](#accelerometer-to-led-mapping)
 - [Functions used](#functions-used)
 - [Code flowchart](#code-flowchart)
+- [Working hardware demonstration](#working-hardware-demonstration)
 
 ## Hardware and configuration
 
@@ -98,7 +99,7 @@ The application sets bits with `rows[i] |= 1 << j`. In the logical bitmap, **bit
 
 ### Actual LED matrix output on the SRA board
 
-These photographs show the same SRA board running the MPU6050 example while held at different orientations. The LED patterns change with the measured acceleration direction.
+These photographs show the SRA board running the MPU6050 example with the OLED and LED matrix enabled. The OLED displays pitch and roll, and the LED patterns change with the measured acceleration direction.
 
 | Left tilt | Right tilt |
 | --- | --- |
@@ -189,8 +190,8 @@ flowchart TD
 
 ## Working hardware demonstration
 
-The following is a real recording of the SRA board with an MPU6050 connected. OLED support is disabled for this demonstration; the LED matrix responds to changes in orientation.
+The complete video below shows the SRA board running this example with the **MPU6050, OLED, and LED matrix operating together**. As the board is tilted, the OLED displays updated pitch and roll values while the LED matrix visualises the accelerometer direction. A motor-driver module is also installed but is not used by this example.
 
-![Animated preview of the MPU6050-driven LED matrix](assets/mpu_demo_preview.gif)
+[![Animated preview showing the OLED and LED matrix responding to MPU6050 measurements](assets/mpu_demo_preview.gif)](assets/mpu_demo.mp4)
 
-[Watch the complete MPU6050 LED matrix demonstration (MP4)](assets/mpu_demo.mp4)
+[Watch the complete 14.6-second hardware demonstration (MP4)](assets/mpu_demo.mp4)
